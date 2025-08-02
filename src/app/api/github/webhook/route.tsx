@@ -1,36 +1,23 @@
-import { Webhooks, createNodeMiddleware } from "@octokit/webhooks";
-import { NextRequest, NextResponse } from "next/server";
+// app/api/github/webhook/route.ts
 
-// Optional: Initialize Webhooks handler
-const webhooks = new Webhooks({
-  secret: process.env.GITHUB_WEBHOOK_SECRET || "foo",
-});
-
-// Add event listeners
-webhooks.onAny(({ id, name, payload }) => {
-  console.log(`Received event: ${name}`, payload);
-});
+import { NextRequest } from "next/server";
+import { webhooks } from "@/lib/github-webhooks";
 
 export async function POST(req: NextRequest) {
-  const body = await req.text();
-
   const signature = req.headers.get("x-hub-signature-256") || "";
-  const event = req.headers.get("x-github-event") || "";
-  const deliveryId = req.headers.get("x-github-delivery") || "";
+  const body = await req.text();
 
   try {
     await webhooks.verifyAndReceive({
-      id: deliveryId,
-      name: event,
-      payload: body,
+      id: req.headers.get("x-github-delivery")!,
+      name: req.headers.get("x-github-event")!,
       signature,
+      payload: body,
     });
 
-    return NextResponse.json({ success: true });
+    return new Response("ok", { status: 200 });
   } catch (err) {
-    console.error("Webhook verification failed:", err);
-    return new NextResponse("Signature mismatch or invalid payload", {
-      status: 400,
-    });
+    console.error("❌ Webhook verification failed:", err);
+    return new Response("Invalid signature", { status: 401 });
   }
 }
