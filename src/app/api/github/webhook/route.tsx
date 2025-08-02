@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 // Optional: Initialize Webhooks handler
 const webhooks = new Webhooks({
-  secret: process.env.GITHUB_WEBHOOK_SECRET,
+  secret: process.env.GITHUB_WEBHOOK_SECRET || "foo",
 });
 
 // Add event listeners
