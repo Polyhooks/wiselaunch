@@ -1,10 +1,12 @@
 // lib/github-auth.ts
 
-import fs from "fs";
 import jwt from "jsonwebtoken";
 
 const GITHUB_APP_ID = process.env.GITHUB_APP_ID!;
-const GITHUB_PRIVATE_KEY = fs.readFileSync("./private-key.pem", "utf8");
+const GITHUB_PRIVATE_KEY = Buffer.from(
+  process.env.GITHUB_PRIVATE_KEY!,
+  "base64"
+).toString("utf8");
 
 export function generateGitHubJWT(): string {
   const now = Math.floor(Date.now() / 1000);
