@@ -2,6 +2,7 @@
 
 import { Webhooks } from "@octokit/webhooks";
 import { getInstallationAccessToken } from "./github-auth";
+import { cloneAndScanRepos } from "./clone-and-scan-repos";
 
 export const webhooks = new Webhooks({
   secret: process.env.GITHUB_WEBHOOK_SECRET!,
@@ -10,19 +11,9 @@ export const webhooks = new Webhooks({
 webhooks.on("installation", async ({ payload }) => {
   const installationId = payload.installation.id.toString();
   const token = await getInstallationAccessToken(installationId);
-
-  const res = await fetch("https://api.github.com/installation/repositories", {
-    headers: {
-      Authorization: `token ${token}`,
-      Accept: "application/vnd.github+json",
-    },
-  });
-
-  const data = await res.json();
-  console.log(
-    "📦 Installed repos:",
-    data.repositories.map((r: any) => r.full_name)
-  );
+  if (payload.repositories) {
+    cloneAndScanRepos(payload.repositories, token);
+  }
 });
 
 webhooks.on("push", async ({ payload }) => {

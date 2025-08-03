@@ -6,6 +6,7 @@ import { webhooks } from "@/lib/github-webhooks";
 export async function POST(req: NextRequest) {
   const signature = req.headers.get("x-hub-signature-256") || "";
   const body = await req.text();
+  console.log(req);
 
   try {
     await webhooks.verifyAndReceive({
