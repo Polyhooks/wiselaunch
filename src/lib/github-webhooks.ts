@@ -17,8 +17,8 @@ webhooks.on("installation", async ({ payload }) => {
 });
 
 webhooks.on("push", async ({ payload }) => {
-  console.log("here");
-  console.log(payload);
+  if (!payload?.installation?.id) return;
+
   const installationId = payload.installation.id.toString();
   const token = await getInstallationAccessToken(installationId);
 

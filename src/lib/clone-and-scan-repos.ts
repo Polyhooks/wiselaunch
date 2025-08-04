@@ -1,10 +1,58 @@
 import { execSync } from "child_process";
 import fs from "fs";
+import { readFile } from "fs/promises";
 import path from "path";
 import os from "os";
 
 interface Repo {
   full_name: string; // e.g. "Polyhooks/wiselaunch"
+}
+
+interface Position {
+  line: number;
+  col: number;
+  offset: number;
+}
+
+interface SemgrepMetadata {
+  category: string;
+  subcategory: string[];
+  cwe: string[];
+  confidence: string;
+  likelihood: string;
+  impact: string;
+  owasp: string[];
+  technology: string[];
+  references: string[];
+  license: string;
+  vulnerability_class: string[];
+  source: string;
+  shortlink: string;
+}
+
+interface SemgrepExtra {
+  message: string;
+  metadata: SemgrepMetadata;
+  severity: string;
+  fingerprint: string;
+  lines: string;
+  validation_state: string;
+  engine_kind: string;
+}
+
+interface SemgrepFinding {
+  check_id: string;
+  path: string;
+  start: Position;
+  end: Position;
+  extra: SemgrepExtra;
+  fullFile?: string;
+  referencedCode?: string;
+}
+
+interface SemgrepOutput {
+  version: string;
+  results: SemgrepFinding[];
 }
 
 const resultsDir = path.resolve("scan-results");
@@ -27,8 +75,9 @@ export async function cloneAndScanRepos(
         cloneBaseDir
       );
       console.log(repoPath);
-      const resultPath = runSemgrep(repoSlug, repoPath, cloneBaseDir);
-      moveResultToOutput(resultPath, repoSlug);
+      const results = runSemgrep(repoSlug, repoPath);
+      const hydratedResults = await hydrateSemgrepResultsWithCode(results);
+      console.log(hydratedResults);
     } catch (err) {
       console.error(`❌ Error processing ${repo.full_name}:`, err);
     }
@@ -48,24 +97,48 @@ function cloneRepo(fullName: string, token: string, baseDir: string): string {
   return destPath;
 }
 
-function runSemgrep(
-  repoSlug: string,
-  repoPath: string,
-  outputDir: string
-): string {
+function runSemgrep(repoSlug: string, repoPath: string): SemgrepOutput {
   console.log(`🔍 Running Semgrep on ${repoSlug}...`);
 
-  const resultPath = path.join(outputDir, `${repoSlug}.json`);
-
-  execSync(`semgrep --config=auto --json --output ${resultPath} ${repoPath}`, {
-    stdio: "inherit",
+  const output = execSync(`semgrep --config=auto --json ${repoPath}`, {
+    encoding: "utf-8",
   });
 
-  return resultPath;
+  return JSON.parse(output);
 }
 
-function moveResultToOutput(resultPath: string, repoSlug: string) {
-  const targetPath = path.join(resultsDir, `${repoSlug}.json`);
-  fs.renameSync(resultPath, targetPath);
-  console.log(`📄 Scan result saved to ${targetPath}`);
+async function hydrateSemgrepResultsWithCode(
+  parsed: SemgrepOutput
+): Promise<SemgrepOutput> {
+  const hydratedResults: SemgrepFinding[] = [];
+
+  for (const finding of parsed.results) {
+    const filePath = finding.path;
+    let fullFile: string | undefined;
+    let referencedCode: string | undefined;
+
+    try {
+      fullFile = await readFile(filePath, "utf-8");
+      const lines = fullFile.split("\n");
+      const start = Math.max(finding.start.line - 1, 0);
+      const end = Math.min(finding.end.line, lines.length);
+      referencedCode = lines.slice(start, end).join("\n");
+    } catch (err) {
+      console.warn(
+        `⚠️ Could not read file ${filePath}:`,
+        (err as Error).message
+      );
+    }
+
+    hydratedResults.push({
+      ...finding,
+      fullFile,
+      referencedCode,
+    });
+  }
+
+  return {
+    ...parsed,
+    results: hydratedResults,
+  };
 }
